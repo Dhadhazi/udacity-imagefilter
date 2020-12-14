@@ -2,6 +2,8 @@ import express from "express";
 import bodyParser from "body-parser";
 import { filterImageFromURL, deleteLocalFiles } from "./util/util";
 
+const isImageUrl = require("is-image-url");
+
 (async () => {
   // Init the Express application
   const app = express();
@@ -12,25 +14,23 @@ import { filterImageFromURL, deleteLocalFiles } from "./util/util";
   // Use the body parser middleware for post requests
   app.use(bodyParser.json());
 
-  function validURL(str) {
-    var pattern = new RegExp(
-      "^(https?:\\/\\/)?" + // protocol
-        "((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|" + // domain name
-        "((\\d{1,3}\\.){3}\\d{1,3}))" + // OR ip (v4) address
-        "(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*" + // port and path
-        "(\\?[;&a-z\\d%_.~+=-]*)?" + // query string
-        "(\\#[-a-z\\d_]*)?$",
-      "i"
-    ); // fragment locator
-    return !!pattern.test(str);
-  }
-
   app.get("/filteredimage", async (req, res) => {
     const query = req.query;
     if (!query.image_url)
-      res.status(401).send("Please provide image url in the query");
-    if (!validURL(query.image_url))
-      res.status(401).send("Please provide a valid image url");
+      res.status(406).send("Please provide image_url in the query");
+    else if (!isImageUrl(query.image_url))
+      res.status(415).send("Please provide a valid image url");
+    else {
+      const local_file_link = await filterImageFromURL(query.image_url);
+      res.status(200).sendFile(local_file_link, (err: Error) => {
+        if (err) {
+          res.send("Something went wrong");
+          console.log(err);
+        } else {
+          deleteLocalFiles([local_file_link]);
+        }
+      });
+    }
   });
 
   // @TODO1 IMPLEMENT A RESTFUL ENDPOINT
